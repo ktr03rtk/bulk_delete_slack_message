@@ -1,0 +1,22 @@
+run:
+  concurrency: 4
+
+linters:
+  enable-all: true
+  disable:
+    - bodyclose
+    - gochecknoglobals
+    - gochecknoinits
+    - goheader
+    # - gomnd
+    - interfacer
+    - lll
+    - maligned
+    - scopelint
+    - unparam
+    - wrapcheck
+    # - wsl
+
+issues:
+  exclude-use-default: true
+  fix: true
