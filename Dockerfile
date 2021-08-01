@@ -10,7 +10,8 @@ COPY ./cmd ./
 
 RUN go build -o ../bin ./...
 
-ENTRYPOINT [ "/bin/sh" ]
+# ENTRYPOINT [ "/bin/sh" ]
+ENTRYPOINT [ "go", "run", "cmd/bulkdelete/main.go" ]
 
 # runtime stage
 # FROM alpine as runtime-stage
