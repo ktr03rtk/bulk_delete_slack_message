@@ -1,5 +1,4 @@
-# build stage
-FROM golang:alpine as build-stage
+FROM golang:alpine
 
 WORKDIR /go/src
 
@@ -10,11 +9,4 @@ COPY ./cmd ./
 
 RUN go build -o ../bin ./...
 
-ENTRYPOINT [ "/bin/sh" ]
-
-# runtime stage
-# FROM alpine as runtime-stage
-
-# COPY --from=build-stage /go/bin /go/bin
-
-# ENTRYPOINT [ "/go/bin/bulkdelete" ]
+ENTRYPOINT [ "/go/bin/bulkdelete" ]

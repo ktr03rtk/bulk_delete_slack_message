@@ -5,6 +5,7 @@ linters:
   enable-all: true
   disable:
     - bodyclose
+    - forbidigo
     - gochecknoglobals
     - gochecknoinits
     - goheader
