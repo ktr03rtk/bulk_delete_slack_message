@@ -1,20 +1,28 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/slack-go/slack"
 )
 
+const shortForm = "2006/01/02"
+
 var (
 	slackAPIToken string
-	channelID     string
+	channelIDList []string
 )
+
+type client struct {
+	*slack.Client
+}
 
 func getEnv() error {
 	s, ok := os.LookupEnv("SLACK_API_TOKEN")
@@ -24,43 +32,106 @@ func getEnv() error {
 
 	slackAPIToken = s
 
-	c, ok := os.LookupEnv("CHANNEL_ID")
+	c, ok := os.LookupEnv("CHANNEL_ID_LIST")
 	if !ok {
-		return errors.New("env CHANNEL_ID is not found")
+		return errors.New("env CHANNEL_ID_LIST is not found")
 	}
 
-	channelID = c
+	channelIDList = strings.Split(c, ",")
 
 	return nil
 }
 
-func bulkDelete(api *slack.Client, oldestTimeStamp, cursor string) {
+func newClient() *client {
+	return &client{
+		slack.New(slackAPIToken),
+	}
+}
+
+func (c *client) getChannelNameList() ([]string, error) {
+	channelNameList := make([]string, 0, len(channelIDList))
+
+	for _, channelID := range channelIDList {
+		channel, err := c.GetConversationInfo(channelID, true)
+		if err != nil {
+			return nil, err
+		}
+
+		channelNameList = append(channelNameList, channel.GroupConversation.Name)
+	}
+
+	return channelNameList, nil
+}
+
+func specifyLatestTime() (time.Time, error) {
+	fmt.Println("This program delete SLACK messages older than the entered date.")
+	fmt.Printf("Enter date in the format like %s:  ", shortForm)
+
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	input := scanner.Text()
+
+	if input == "" {
+		// default: delete messages older than 1 month
+		return time.Now().AddDate(0, -1, 0), nil
+	}
+
+	t, err := time.Parse(shortForm, input)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return t, nil
+}
+
+func confirm(timestamp string, channelNameList []string) error {
+	fmt.Printf("Are you sure you want to delete messages older than %s of Channels %q? (Y/n) >", timestamp, channelNameList)
+
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+
+	switch strings.ToLower(scanner.Text()) {
+	case "y", "yes":
+		fmt.Println("start.")
+	default:
+		return errors.New("aborting the process")
+	}
+
+	return nil
+}
+
+func (c *client) bulkDelete(timestamp time.Time, channelID, cursor string) error {
 	params := &slack.GetConversationHistoryParameters{
 		ChannelID: channelID,
-		Limit:     2,
-		Oldest:    oldestTimeStamp,
+		Limit:     100,
+		Latest:    strconv.FormatInt(timestamp.Unix(), 10) + ".000000",
 		Cursor:    cursor,
 	}
 
-	res, err := api.GetConversationHistory(params)
+	res, err := c.GetConversationHistory(params)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	fmt.Printf("--------------- %+v\n", res.Messages[0])
-
 	for _, msg := range res.Messages {
-		a, b, err := api.DeleteMessage(channelID, msg.Timestamp)
+		c, t, err := c.DeleteMessage(channelID, msg.Timestamp)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
-		fmt.Printf("--------------- %+v\n%+v\n", a, b)
+		fmt.Printf("Deleted: channel_ID: %+v, timestamp: %+v\n", c, t)
+
+		// chat.delete API is Tier3. Rate limit it 50+ per minute.
+		time.Sleep(1200 * time.Millisecond)
 	}
 
 	if res.HasMore {
-		bulkDelete(api, oldestTimeStamp, res.ResponseMetaData.NextCursor)
+		if err := c.bulkDelete(timestamp, channelID, res.ResponseMetaData.NextCursor); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func main() {
@@ -68,32 +139,26 @@ func main() {
 		log.Fatal(err)
 	}
 
-	const shortForm = "2006/01/02"
-	var (
-		s string
-		t time.Time
-	)
+	c := newClient()
 
-	fmt.Println("This program will delete SLACK messages older than the entered date.")
-	fmt.Printf("Enter date in the format like %s. :  ", shortForm)
-
-	n, err := fmt.Scanln(&s)
-
-	switch {
-	case n == 0 && err.Error() == "unexpected newline":
-		t = time.Now().AddDate(0, -1, 0)
-	case err != nil:
+	channelNameList, err := c.getChannelNameList()
+	if err != nil {
 		log.Fatal(err)
-	default:
-		t, err = time.Parse(shortForm, s)
-		if err != nil {
+	}
+
+	latestTimeStamp, err := specifyLatestTime()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := confirm(latestTimeStamp.Format(shortForm), channelNameList); err != nil {
+		fmt.Println(err)
+		os.Exit(0)
+	}
+
+	for _, channelID := range channelIDList {
+		if err := c.bulkDelete(latestTimeStamp, channelID, ""); err != nil {
 			log.Fatal(err)
 		}
 	}
-
-	oldestTimeStamp := strconv.FormatInt(t.Unix(), 10) + ".000000"
-
-	api := slack.New(slackAPIToken)
-
-	bulkDelete(api, oldestTimeStamp, "")
 }
