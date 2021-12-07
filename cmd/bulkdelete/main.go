@@ -48,6 +48,7 @@ func specifyLatestTime() (*time.Time, error) {
 	if input == "" {
 		// default: delete messages older than 1 month
 		t := time.Now().AddDate(0, -1, 0)
+
 		return &t, nil
 	}
 
