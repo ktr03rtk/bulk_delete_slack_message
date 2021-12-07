@@ -11,4 +11,4 @@ This program delete SLACK messages older than the entered date.
 
 - Definite the slack.env file by referring to the sample_slack.env file.
 
-- Run the `docker-compose run bulk-delete` command to start the program. It inquire the latest timestamp for deletion, enter the timestamp and confirm.
+- Run the `docker-compose run message-delete` command to start the program. It inquire the latest timestamp for deletion, enter the timestamp and confirm.

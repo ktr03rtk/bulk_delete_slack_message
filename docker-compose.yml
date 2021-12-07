@@ -1,12 +1,12 @@
 version: "3.8"
 
 services:
-  bulk-delete:
+  message-delete:
     build: .
     volumes:
       - .:/go/src
     tty: true
     env_file:
       - slack.env
-    container_name: bulk-delete
+    container_name: message-delete
     network_mode: "host"
