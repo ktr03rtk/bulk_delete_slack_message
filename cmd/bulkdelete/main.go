@@ -9,30 +9,29 @@ import (
 	"time"
 
 	"github.com/ktr03rtk/bulk_delete_slack_message/pkg/slack"
-	"github.com/pkg/errors"
 )
 
 const shortForm = "2006/01/02"
 
 var (
 	slackAPIToken string
-	channelIDList []string
+	channelList   []string
 )
 
 func getEnv() error {
 	s, ok := os.LookupEnv("SLACK_API_TOKEN")
 	if !ok {
-		return errors.New("env SLACK_API_TOKEN is not found")
+		return fmt.Errorf("env SLACK_API_TOKEN is not found")
 	}
 
 	slackAPIToken = s
 
-	c, ok := os.LookupEnv("CHANNEL_ID_LIST")
+	c, ok := os.LookupEnv("CHANNEL_LIST")
 	if !ok {
-		return errors.New("env CHANNEL_ID_LIST is not found")
+		return fmt.Errorf("env CHANNEL_LIST is not found")
 	}
 
-	channelIDList = strings.Split(c, ",")
+	channelList = strings.Split(c, ",")
 
 	return nil
 }
@@ -45,8 +44,8 @@ func specifyLatestTime() (*time.Time, error) {
 	scanner.Scan()
 	input := scanner.Text()
 
+	// default: delete messages older than 1 month
 	if input == "" {
-		// default: delete messages older than 1 month
 		t := time.Now().AddDate(0, -1, 0)
 
 		return &t, nil
@@ -54,14 +53,14 @@ func specifyLatestTime() (*time.Time, error) {
 
 	t, err := time.Parse(shortForm, input)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse timestamp: %w", err)
 	}
 
 	return &t, nil
 }
 
-func confirm(timestamp string, channelNameList []string) error {
-	fmt.Printf("Are you sure you want to delete messages of Channels %q older than %s? (Y/n) >", channelNameList, timestamp)
+func confirm(timestamp string, channelList []string) error {
+	fmt.Printf("Are you sure you want to delete messages of Channels %q older than %s? (Y/n) >", channelList, timestamp)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Scan()
@@ -70,7 +69,7 @@ func confirm(timestamp string, channelNameList []string) error {
 	case "y", "yes":
 		fmt.Println("start.")
 	default:
-		return errors.New("aborting the process")
+		return fmt.Errorf("aborting the process")
 	}
 
 	return nil
@@ -83,7 +82,7 @@ func main() {
 
 	c := slack.NewClient(slackAPIToken)
 
-	channelNameList, err := c.GetChannelNameList(channelIDList)
+	channelIDMap, err := c.GetChannelIDMap(channelList)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -93,12 +92,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := confirm(latestTimestamp.Format(shortForm), channelNameList); err != nil {
-		fmt.Println(err)
-		os.Exit(0)
+	if err := confirm(latestTimestamp.Format(shortForm), channelList); err != nil {
+		log.Fatal(err)
 	}
 
-	if err := c.Delete(*latestTimestamp, channelIDList); err != nil {
+	if err := c.Delete(*latestTimestamp, channelIDMap); err != nil {
 		log.Fatal(err)
 	}
 }

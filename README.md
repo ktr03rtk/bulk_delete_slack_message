@@ -2,12 +2,11 @@
 
 ## Overview
 
-This program delete SLACK messages older than the entered date.
+This program delete Slack messages older than the entered date.
 
 ## Usage
 
-- Prepare the SLACK token with correct scope. This program uses conversations.info
-  , conversations.history, chat.delete API. To attach correct scope, see the official document.
+- Prepare the Slack token with correct scope. This program uses conversations.list, conversations.history, chat.delete API. To attach correct scope, see the Slack official document.
 
 - Definite the slack.env file by referring to the sample_slack.env file.
 
