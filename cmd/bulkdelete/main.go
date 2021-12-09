@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ktr03rtk/bulk_delete_slack_message/pkg/slack"
+	"github.com/pkg/errors"
 )
 
 const shortForm = "2006/01/02"
@@ -21,14 +22,14 @@ var (
 func getEnv() error {
 	s, ok := os.LookupEnv("SLACK_API_TOKEN")
 	if !ok {
-		return fmt.Errorf("env SLACK_API_TOKEN is not found")
+		return errors.New("env SLACK_API_TOKEN is not found")
 	}
 
 	slackAPIToken = s
 
 	c, ok := os.LookupEnv("CHANNEL_LIST")
 	if !ok {
-		return fmt.Errorf("env CHANNEL_LIST is not found")
+		return errors.New("env CHANNEL_LIST is not found")
 	}
 
 	channelList = strings.Split(c, ",")
@@ -36,7 +37,7 @@ func getEnv() error {
 	return nil
 }
 
-func specifyLatestTime() (*time.Time, error) {
+func getTargetTime() (*time.Time, error) {
 	fmt.Println("This program delete SLACK messages older than the date you enter.")
 	fmt.Printf("Enter date in the format like %s:  ", shortForm)
 
@@ -53,7 +54,7 @@ func specifyLatestTime() (*time.Time, error) {
 
 	t, err := time.Parse(shortForm, input)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse timestamp: %w", err)
+		return nil, errors.Wrapf(err, "failed to parse timestamp")
 	}
 
 	return &t, nil
@@ -69,7 +70,7 @@ func confirm(timestamp string, channelList []string) error {
 	case "y", "yes":
 		fmt.Println("start.")
 	default:
-		return fmt.Errorf("aborting the process")
+		return errors.New("aborting the process")
 	}
 
 	return nil
@@ -82,21 +83,21 @@ func main() {
 
 	c := slack.NewClient(slackAPIToken)
 
-	channelIDMap, err := c.GetChannelIDMap(channelList)
+	channelMap, err := c.GetChannelMap(channelList)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	latestTimestamp, err := specifyLatestTime()
+	targetTimestamp, err := getTargetTime()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := confirm(latestTimestamp.Format(shortForm), channelList); err != nil {
+	if err := confirm(targetTimestamp.Format(shortForm), channelList); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := c.Delete(*latestTimestamp, channelIDMap); err != nil {
+	if err := c.Delete(*targetTimestamp, channelMap); err != nil {
 		log.Fatal(err)
 	}
 }
